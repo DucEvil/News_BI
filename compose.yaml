@@ -1,0 +1,72 @@
+name: vietnam-news-bi
+
+x-superset: &superset
+  image: apache/superset:5.0.0-dev
+  env_file: .env
+  environment:
+    SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+  volumes:
+    - ./superset:/app/pythonpath:ro
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: news
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Chay python3 scripts/configure.py truoc}
+      POSTGRES_DB: news_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U news -d news_db']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  superset-init:
+    <<: *superset
+    command: [bash, /app/pythonpath/init.sh]
+    restart: 'no'
+
+  superset:
+    <<: *superset
+    depends_on:
+      postgres:
+        condition: service_healthy
+      superset-init:
+        condition: service_completed_successfully
+    ports:
+      - '127.0.0.1:8088:8088'
+    command: [gunicorn, --bind, '0.0.0.0:8088', --workers, '2', --timeout, '120', 'superset.app:create_app()']
+    healthcheck:
+      test: [CMD, python, -c, 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8088/health", timeout=5)']
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+    restart: unless-stopped
+
+  collector:
+    build: ./collector
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_NAME: news_db
+      DB_USER: news
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Chua cau hinh}
+    volumes:
+      - ./sql:/app/sql:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: [python, collect_news.py, --loop]
+    profiles: [scheduled]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
