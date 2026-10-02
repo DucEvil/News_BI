@@ -61,6 +61,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Chua cau hinh}
     volumes:
       - ./sql:/app/sql:ro
+      - ./output:/app/output
     depends_on:
       postgres:
         condition: service_healthy

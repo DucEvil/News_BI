@@ -13,6 +13,8 @@ try:
         assert cur.fetchone()[0] == count, 'Tổng theo nguồn không khớp tổng bài'
         cur.execute('SELECT count(*) FROM articles WHERE title IS NULL OR published_at IS NULL OR source_name IS NULL')
         assert cur.fetchone()[0] == 0, 'Có dữ liệu thiếu trường bắt buộc'
+        cur.execute('SELECT count(*) FROM (SELECT url_hash FROM articles GROUP BY url_hash HAVING count(*) > 1) duplicates')
+        assert cur.fetchone()[0] == 0, 'Có bài trùng URL'
         cur.execute('SELECT id,status,requests_made,articles_received,articles_inserted,capped_windows,error_code FROM collection_runs ORDER BY id DESC LIMIT 5')
         print('5 lần thu thập gần nhất (id, trạng thái, requests, nhận, thêm mới, khoảng bị giới hạn, lỗi):')
         for row in cur.fetchall():

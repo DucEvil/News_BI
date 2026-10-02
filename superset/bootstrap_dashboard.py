@@ -4,10 +4,6 @@ import os
 from sqlalchemy.engine import URL
 from superset.app import create_app
 from superset import db, security_manager
-from superset.models.core import Database
-from superset.connectors.sqla.models import SqlaTable
-from superset.models.slice import Slice
-from superset.models.dashboard import Dashboard
 
 
 def metric(sql, label):
@@ -15,8 +11,42 @@ def metric(sql, label):
             'optionName': 'metric_' + label, 'hasCustomLabel': True}
 
 
+def query_context(dataset_id, params):
+    """Lưu truy vấn để API dữ liệu biểu đồ hoạt động ngay sau bootstrap."""
+    viz = params['viz_type']
+    query = {'time_range': 'No filter', 'filters': [], 'columns': [],
+             'metrics': [], 'orderby': [], 'row_limit': params['row_limit'],
+             'extras': {'where': '', 'having': ''}, 'post_processing': []}
+    if viz == 'table':
+        query['columns'] = params['all_columns']
+        query['orderby'] = [['published_at', False]]
+    elif viz == 'big_number_total':
+        query['metrics'] = [params['metric']]
+    elif viz == 'pie':
+        query['columns'] = params['groupby']
+        query['metrics'] = [params['metric']]
+        query['orderby'] = [[params['metric'], False]]
+    else:
+        query['columns'] = [params['x_axis']]
+        query['metrics'] = params['metrics']
+        query['orderby'] = ([[params['metrics'][0], False]]
+                            if viz == 'echarts_timeseries_bar' else [[params['x_axis'], True]])
+        if viz == 'echarts_timeseries_bar':
+            # Trục danh mục nằm bên trái: số lớn nhất ở trên cùng.
+            query['post_processing'] = [{'operation': 'sort', 'options': {
+                'by': params['metrics'][0]['label'], 'ascending': True}}]
+    return {'datasource': {'id': dataset_id, 'type': 'table'}, 'queries': [query],
+            'form_data': params, 'result_format': 'json', 'result_type': 'full', 'force': False}
+
+
 app = create_app()
 with app.app_context():
+    # Các models Superset cần application context ngay khi import.
+    from superset.models.core import Database
+    from superset.connectors.sqla.models import SqlaTable
+    from superset.models.slice import Slice
+    from superset.models.dashboard import Dashboard
+
     admin = security_manager.find_user(username=os.environ.get('SUPERSET_ADMIN_USERNAME', 'admin'))
     database = db.session.query(Database).filter_by(database_name='Tin tức Việt Nam').one_or_none()
     if database is None:
@@ -49,13 +79,16 @@ with app.app_context():
             'metrics': [total_per_day], 'groupby': [], 'show_legend': False,
             'rich_tooltip': True, 'x_axis_title': 'Ngày xuất bản', 'y_axis_title': 'Số bài đã lưu',
             'markerEnabled': True, 'forecastEnabled': False}),
-        ('10 nguồn có nhiều bài nhất', 'dist_bar', 'v_articles', {
-            'metrics': [count], 'groupby': ['source_name'], 'columns': [],
+        ('10 nguồn có nhiều bài nhất', 'echarts_timeseries_bar', 'v_articles', {
+            'metrics': [count], 'x_axis': 'source_name', 'groupby': [],
             'row_limit': 10, 'order_desc': True, 'show_legend': False,
-            'show_bar_value': True, 'x_axis_label': 'Nguồn tin', 'y_axis_label': 'Số bài'}),
+            'show_value': True, 'orientation': 'horizontal', 'x_axis_force_categorical': True,
+            'x_axis_title': '', 'y_axis_title': 'Số bài',
+            'x_axis_sort': count['label'], 'x_axis_sort_asc': True}),
         ('Tỷ trọng bài theo nguồn (toàn bộ nguồn)', 'pie', 'v_articles', {
             'metric': count, 'groupby': ['source_name'], 'row_limit': 10000,
-            'donut': True, 'show_legend': True, 'show_labels': True,
+            'donut': True, 'show_legend': True, 'show_labels': False,
+            'legend_type': 'scroll', 'legend_orientation': 'right',
             'label_type': 'key_percent', 'sort_by_metric': True}),
         ('Danh sách bài báo', 'table', 'v_articles', {
             'query_mode': 'raw', 'all_columns': ['published_at', 'title', 'source_name', 'description', 'url'],
@@ -76,6 +109,7 @@ with app.app_context():
         db.session.flush()
         params['slice_id'] = chart.id
         chart.params = json.dumps(params, ensure_ascii=False)
+        chart.query_context = json.dumps(query_context(ds.id, params), ensure_ascii=False)
         charts.append(chart)
     dashboard = db.session.query(Dashboard).filter_by(slug='tin-tuc-viet-nam').one_or_none()
     if dashboard is None:
@@ -91,7 +125,9 @@ with app.app_context():
         'GRID_ID': {'id': 'GRID_ID', 'type': 'GRID', 'children': [], 'parents': ['ROOT_ID']},
         'HEADER_ID': {'id': 'HEADER_ID', 'type': 'HEADER', 'meta': {'text': dashboard.dashboard_title}},
     }
-    for index, group in enumerate([(charts[:2], 6, 18), ([charts[2]], 12, 45), (charts[3:5], 6, 45), ([charts[5]], 12, 50)]):
+    for index, group in enumerate([(charts[:2], 6, 18), ([charts[2]], 12, 45),
+                                   ([charts[3]], 12, 50), ([charts[4]], 12, 45),
+                                   ([charts[5]], 12, 50)]):
         items, width, height = group
         row_id = f'ROW-{index}'
         layout['GRID_ID']['children'].append(row_id)

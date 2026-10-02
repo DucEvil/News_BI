@@ -1,6 +1,23 @@
 # Bài thực hành BI: Theo dõi và phân tích tin tức Việt Nam
 
-Bộ mã thực hiện các bước sau khi đã có khóa NewsAPI: thu thập bài có từ khóa `Vietnam`, lưu vào PostgreSQL, khởi tạo Apache Superset và tạo dashboard. Hướng dẫn dành cho **Windows + Ubuntu WSL 2 + Docker Desktop**, chạy phục vụ bài học trên máy cá nhân.
+Bộ mã thực hiện các bước sau khi đã có khóa NewsAPI: thu thập bài có từ khóa `Vietnam`, lưu vào PostgreSQL, khởi tạo Apache Superset và tạo dashboard. Chạy phục vụ bài học trên máy cá nhân với **Windows + Docker Desktop (Linux containers / WSL 2)**. Có thể dùng PowerShell ngay trong `E:\News_BI` hoặc terminal Ubuntu.
+
+## Chạy nhanh trên máy hiện tại
+
+Ngày 01/10/2026, hệ thống đã chạy với dữ liệu thật: **608 bài, 239 nguồn**, tổng theo ngày/nguồn khớp, không trùng URL. Superset đã có kết nối PostgreSQL, hai datasets và sáu biểu đồ; đăng nhập, truy vấn cả sáu biểu đồ và số liệu Top 10 đều được kiểm tra thành công. Collector định kỳ đang bật mỗi sáu giờ. Một khoảng ngày UTC vượt giới hạn trang nên trạng thái thu thập là `partial`.
+
+1. Khóa NewsAPI đã được bạn điền trong `E:\News_BI\.env`. Mật khẩu Superset nằm trong dòng `SUPERSET_ADMIN_PASSWORD`; tên đăng nhập `admin`.
+2. Trong PowerShell tại thư mục dự án, chạy:
+
+   ```powershell
+   .\scripts\start.ps1 -Schedule
+   ```
+
+   Script tự tìm Docker ở PATH hoặc thư mục cài đặt Docker Desktop, thu thập, kiểm tra database và cả sáu biểu đồ, xuất báo cáo và bật lịch sáu giờ/lần. Nếu PowerShell chặn script, mở Ubuntu và dùng `bash scripts/start.sh`, rồi bật collector theo mục 7.
+3. Mở [dashboard Superset](http://localhost:8088/superset/dashboard/tin-tuc-viet-nam/).
+4. Xem `output/BAO_CAO.md`, `output/verification.json` và `output/articles_sample.json`. Báo cáo chỉ được xuất khi đã có dữ liệu thật và tổng theo ngày/nguồn khớp tổng bài.
+
+Không cần giải nén hay tải ZIP. `.env` và `output/` không được Git theo dõi. Khi khởi tạo lại trên máy khác, có thể dùng `python scripts/configure.py --prepare` để sinh mật khẩu rồi điền khóa bằng trình soạn thảo, hoặc chạy `python3 scripts/configure.py` để nhập tương tác.
 
 ## 1. Checklist trong đề được thực hiện như thế nào?
 
@@ -11,7 +28,7 @@ Bộ mã thực hiện các bước sau khi đã có khóa NewsAPI: thu thập b
 | Cài và kết nối Superset | `compose.yaml`, cấu hình và khởi tạo trong `superset/` | Mở Superset, thấy kết nối “Tin tức Việt Nam” và hai datasets |
 | Dashboard thời gian và nguồn tin | Script `superset/bootstrap_dashboard.py` | Dashboard có sáu biểu đồ/bảng, dữ liệu khớp SQL |
 
-**Trạng thái bàn giao:** mã đã được kiểm tra cú pháp và 10 tình huống kiểm thử logic thu thập đều đạt. Chưa chạy tích hợp NewsAPI, PostgreSQL và giao diện Superset vì môi trường tạo bộ mã không có Docker và không có khóa API của bạn. Chỉ đánh dấu hoàn thành thực hành khi đã chạy và có bằng chứng trên máy bạn. Bộ mã không kèm dữ liệu giả.
+**Kiểm chứng:** 10 tình huống kiểm thử thu thập đều đạt. PostgreSQL và Superset đã chạy tích hợp, có đăng nhập thành công và truy vấn được cả sáu biểu đồ. Kết quả dữ liệu thật và nhật ký thu thập được lưu trong `output/` sau khi nhập khóa và chạy collector. Không đánh dấu bước thu thập hoàn thành nếu chưa có dữ liệu thật; bộ mã không kèm dữ liệu giả.
 
 ## 2. Chuẩn bị Windows và WSL
 
@@ -38,19 +55,15 @@ Bộ mã thực hiện các bước sau khi đã có khóa NewsAPI: thu thập b
 
 Từ đây, mọi lệnh Bash/Python/Docker trong hướng dẫn đều chạy trong **Ubuntu WSL**, không chạy trong PowerShell. Mở trang Superset bằng trình duyệt trên Windows. Docker Desktop phải hoạt động trong lúc làm bài.
 
-## 3. Giải nén bộ mã vào Ubuntu
+## 3. Mở bộ mã có sẵn trong Ubuntu (nếu dùng Bash)
 
-Tải `Vietnam_News_BI_WSL.zip` vào thư mục Downloads trên Windows. Trong Ubuntu:
+Mã đã nằm ở `E:\News_BI`. Trong Ubuntu WSL:
 
 ```bash
-sudo apt update
-sudo apt install -y unzip python3 nano
-mkdir -p ~/bi-news
-unzip "/mnt/c/Users/TEN_WINDOWS/Downloads/Vietnam_News_BI_WSL.zip" -d ~/bi-news
-cd ~/bi-news/news-bi
+cd /mnt/e/News_BI
 ```
 
-Thay `TEN_WINDOWS` bằng tên thư mục tài khoản Windows của bạn. Nếu lưu ZIP ở nơi khác, sửa đường dẫn tương ứng. Có thể xem tên các thư mục bằng `ls /mnt/c/Users`. Nếu bạn đã giải nén bằng Windows, sao chép thư mục `news-bi` vào Ubuntu và đi tới thư mục đó. Đặt mã trong `~/bi-news` giúp thao tác tệp trên WSL thuận tiện hơn.
+Docker Desktop cần bật WSL Integration cho Ubuntu nếu muốn gọi `docker` từ Ubuntu. Nếu chỉ dùng PowerShell, không cần bước này.
 
 ## 4. Điền khóa NewsAPI và đặt mật khẩu Superset
 

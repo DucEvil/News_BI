@@ -9,5 +9,7 @@ docker compose build collector
 docker compose up -d --wait superset
 docker compose run --rm collector python collect_news.py
 docker compose run --rm collector python verify_database.py
+docker compose exec -T superset python /app/pythonpath/verify_dashboard.py
+docker compose run --rm collector python export_report.py
 echo 'Mở http://localhost:8088/superset/dashboard/tin-tuc-viet-nam/ trên Windows.'
 echo 'Bật định kỳ: docker compose --profile scheduled up -d collector'
