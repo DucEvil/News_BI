@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "vietnam-news-superset": {
+      "command": "C:\\Users\\ADMIN\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe",
+      "args": ["compose", "--project-directory", "E:/News_BI", "-f", "E:/News_BI/compose.yaml", "--profile", "ai", "run", "--rm", "-T", "--no-deps", "analytics", "python", "-m", "analytics.mcp_server"]
+    }
+  }
+}

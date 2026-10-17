@@ -1,0 +1,7 @@
+.git
+.env
+output
+backups
+**/__pycache__
+**/*.pyc
+evaluation/labels.jsonl

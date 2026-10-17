@@ -69,5 +69,32 @@ services:
     profiles: [scheduled]
     restart: unless-stopped
 
+  analytics: &analytics
+    image: vietnam-news-analytics:th2
+    build:
+      context: .
+      dockerfile: analytics/Dockerfile
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_NAME: news_db
+      DB_USER: news
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Chua cau hinh}
+      SUPERSET_INTERNAL_URL: http://superset:8088
+    volumes:
+      - ./sql:/app/sql:ro
+      - ./output:/app/output
+      - ./evaluation:/app/evaluation:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: [ai]
+    restart: 'no'
+
+  ai-worker:
+    <<: *analytics
+    command: [python, -m, analytics.pipeline, --loop]
+    restart: unless-stopped
+
 volumes:
   pgdata:

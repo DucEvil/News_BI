@@ -13,7 +13,20 @@ target = root / '.env'
 parser = argparse.ArgumentParser(description='Cấu hình NewsAPI và Superset trên máy cá nhân')
 parser.add_argument('--prepare', action='store_true',
                     help='Sinh mật khẩu, để trống khóa API để điền trong trình soạn thảo')
+parser.add_argument('--add-ai', action='store_true', help='Bổ sung biến Gemini/AI còn thiếu vào .env, giữ nguyên bí mật hiện có')
 args = parser.parse_args()
+if args.add_ai:
+    if not target.exists():
+        raise SystemExit('Tạo .env trước bằng --prepare.')
+    existing = target.read_text(encoding='utf-8-sig')
+    names = {line.split('=',1)[0].strip() for line in existing.splitlines() if '=' in line and not line.lstrip().startswith('#')}
+    additions = [line for line in (root / '.env.example').read_text(encoding='utf-8').splitlines()
+                 if line.startswith(('GEMINI_', 'AI_')) and line.split('=',1)[0] not in names]
+    if additions:
+        with target.open('a',encoding='utf-8') as handle:
+            handle.write('\n# TH2 Gemini AI\n'+'\n'.join(additions)+'\n')
+    print('Đã kiểm tra biến TH2; giữ nguyên khóa API và mật khẩu hiện có. Điền GEMINI_API_KEY trong .env khi sẵn sàng.')
+    raise SystemExit(0)
 if target.exists():
     raise SystemExit('Đã có .env. Mở tệp để sửa; tệp hiện tại được giữ nguyên.')
 key = '' if args.prepare else getpass.getpass('Dán khóa NewsAPI rồi Enter (không hiện ký tự): ').strip()

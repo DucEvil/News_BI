@@ -1,5 +1,10 @@
 # Bài thực hành BI: Theo dõi và phân tích tin tức Việt Nam
 
+**TH2 — Gemini AI và Apache Superset MCP:** xem [TH2.md](TH2.md).
+Chạy PowerShell `powershell -ExecutionPolicy Bypass -File .\scripts\start-ai.ps1`
+sau khi mở Docker Desktop. Điền `GEMINI_API_KEY` trong `.env` khi sẵn sàng;
+dashboard TH2 dùng URL `/superset/dashboard/tin-tuc-ai-th2/`, dashboard TH1 giữ nguyên.
+
 Bộ mã thực hiện các bước sau khi đã có khóa NewsAPI: thu thập bài có từ khóa `Vietnam`, lưu vào PostgreSQL, khởi tạo Apache Superset và tạo dashboard. Chạy phục vụ bài học trên máy cá nhân với **Windows + Docker Desktop (Linux containers / WSL 2)**. Có thể dùng PowerShell ngay trong `E:\News_BI` hoặc terminal Ubuntu.
 
 ## Chạy nhanh trên máy hiện tại
