@@ -2,6 +2,7 @@
 import json
 from datetime import datetime,timezone
 from analytics.common import OUTPUT
+from analytics.dashboard import definitions
 
 
 def export_report(result):
@@ -10,6 +11,7 @@ def export_report(result):
     ai=result['ai']
     forecast=result['forecast']
     evaluation=result['evaluation']
+    chart_count=len(definitions())
     metrics=forecast.get('metrics') or {}
     rows='\n'.join(f"| {name} | {score['mae']:.3f} | {score['smape']:.2f}% | {score['test_days']} |" for name,score in metrics.items())
     mcp_path=OUTPUT/'mcp_checks.json'
@@ -79,7 +81,7 @@ phiên bản Superset này và không yêu cầu đổi sang CRM hoặc nâng c�
 
 Các tools: `get_analysis_status`, `list_dashboards`, `list_datasets`,
 `ensure_ai_dashboard`, `get_chart_data`. Tool tạo dashboard chỉ được tạo/cập nhật
-10 biểu đồ và các dataset TH2 định sẵn; tool đọc dữ liệu chart chỉ nhận chart
+{chart_count} biểu đồ và các dataset TH2 định sẵn; tool đọc dữ liệu chart chỉ nhận chart
 thuộc dashboard TH2. Không cung cấp công cụ thực thi SQL tùy ý hay gọi Gemini.
 
 **Bằng chứng runtime:** {mcp_status}
@@ -94,9 +96,14 @@ và kiểm tra trực quan hóa, không tuyên bố Gemini đang tự gọi MCP 
 
 URL: http://localhost:8088/superset/dashboard/tin-tuc-ai-th2/
 
-10 biểu đồ: số bài đã phân tích, tỷ lệ bao phủ, cơ cấu cảm xúc, số bài theo chủ đề,
+{chart_count} biểu đồ: số bài đã phân tích, tỷ lệ bao phủ, cơ cấu cảm xúc, số bài theo chủ đề,
 điểm cảm xúc theo ngày, số bài tiêu cực theo nguồn, lịch sử và dự báo lượng bài,
 bảng MAE/sMAPE của các mô hình dự báo, chi tiết phân tích Gemini, nhật ký AI.
+Sáu báo cáo bổ sung gồm trạng thái xử lý AI, Top 10 nguồn tin đã thu thập,
+cảm xúc trung bình theo chủ đề, số bài có kết quả AI theo ngày phân tích gần
+nhất (giờ Việt Nam), độ bao phủ AI theo 50 nguồn có nhiều bài nhất và so sánh
+sai số MAE. Bao phủ là tỷ lệ bài đã phân tích, không phải accuracy; MAE vẫn
+là kiểm định lịch sử nếu dữ liệu cũ. MCP tạo/cập nhật lại không tạo bản sao.
 
 Dashboard chỉ đọc SQL views; refresh 5 phút không gọi Gemini. Đóng web không
 dừng container. Worker AI định kỳ chỉ hoạt động khi bật bằng lệnh riêng hoặc
@@ -139,6 +146,8 @@ Không có khoảng tin cậy đã hiệu chỉnh; đây là ước lượng đi
 {forecast['note']}
 
 Nếu dữ liệu chậm quá 3 ngày, ghi `stale_data` và không sinh dự báo mới.
+Kết quả kiểm định lịch sử vẫn hiển thị trên dashboard cùng `data_status` và
+`data_lag_days`; các chỉ số này không phải dự báo mới cho ngày hiện tại.
 Dữ liệu lịch sử ít, khác biệt coverage theo ngày và giới hạn 100 bài/request
 làm kết quả thiên lệch. Mô hình dự báo **lượng thu thập**, không dự báo tổng tin
 thực tế, xu hướng xã hội hay giá trị kinh tế. Nội dung NewsAPI rút gọn và từ
@@ -161,7 +170,7 @@ khóa Vietnam có thể xuất hiện thoáng qua; không đồng nghĩa mọi b
 1. Kiến trúc: đã thiết kế và migration vào kho PostgreSQL có sẵn.
 2. AI: mã Gemini đã triển khai; trạng thái chạy thật `{ai['status']}`, chỉ hoàn tất kiểm chứng Gemini sau khi có key.
 3. Superset MCP: xem bằng chứng runtime ở mục 3 và `mcp_checks.json`.
-4. Dashboard: đã định nghĩa 10 biểu đồ; kết quả AI xuất hiện khi worker có dự đoán thật.
+4. Dashboard: đã định nghĩa {chart_count} biểu đồ; kết quả AI xuất hiện khi worker có dự đoán thật.
 5. Báo cáo và đánh giá: báo cáo này, backtest thật; đánh giá chất lượng Gemini chờ nhãn và dự đoán.
 6. Nhiều mô hình: đã so sánh 3 baseline dự báo và đề xuất 4 hướng AI mở rộng.
 

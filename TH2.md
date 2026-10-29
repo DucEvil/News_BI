@@ -77,7 +77,7 @@ Máy ngủ/tắt hoặc Docker dừng sẽ tạm ngừng lịch chạy.
 | 1. Kiến trúc kết nối dữ liệu trung tâm | PostgreSQL `articles`, `article_ai`, `ai_runs`, `forecast_runs`, SQL views | Sơ đồ Mermaid trong báo cáo; `sql/002_ai.sql` |
 | 2. Mô hình AI | Gemini sentiment/topic/summary, ba mô hình dự báo | `analytics/gemini.py`, `forecast.py`; `pipeline_status.json` |
 | 3. Superset MCP | MCP stdio dùng SDK chính thức, gọi Superset REST | `analytics/verify_mcp.py` thực hiện initialize/list_tools/call_tool; `mcp_checks.json` |
-| 4. Tích hợp AI vào dashboard | Dashboard riêng gồm 10 biểu đồ | Chưa có key: KPI AI 0 và nhật ký waiting_key; có key: dữ liệu dự đoán thật |
+| 4. Tích hợp AI vào dashboard | Dashboard riêng gồm 16 biểu đồ | Chưa có key: KPI AI 0 và nhật ký waiting_key; có key: dữ liệu dự đoán thật |
 | 5. Báo cáo và đánh giá | Báo cáo kỹ thuật tự sinh, backtest dự báo, đánh giá phân loại bằng nhãn người | `output/th2/BAO_CAO_KY_THUAT.md`, các tệp JSON đánh giá |
 | 6. Đa dạng mô hình/sáng tạo | Naive, moving average, linear trend đã triển khai; XLM-R, clustering, RAG và phát hiện burst đề xuất | Mục 6 báo cáo |
 
@@ -109,7 +109,7 @@ Các công cụ:
 
 - `get_analysis_status`: số bài, bao phủ và lần chạy AI gần nhất.
 - `list_dashboards`, `list_datasets`: xác nhận tài sản trong Superset.
-- `ensure_ai_dashboard`: tạo/cập nhật đúng dashboard TH2 và 10 charts định sẵn.
+- `ensure_ai_dashboard`: tạo/cập nhật đúng dashboard TH2 và 16 charts định sẵn.
 - `get_chart_data`: đọc dữ liệu một chart thuộc TH2.
 
 Không cần cấu hình host để kiểm chứng: `start-ai.ps1` tự chạy MCP client và
@@ -127,6 +127,24 @@ docker compose --profile ai up -d ai-worker
 ```
 
 ## Các lệnh kiểm chứng riêng
+
+Dashboard có thêm 6 báo cáo: trạng thái xử lý AI, Top 10 nguồn tin đã thu thập,
+cảm xúc trung bình theo chủ đề, số bài có kết quả AI theo ngày phân tích gần
+nhất (giờ Việt Nam), độ bao phủ AI theo 50 nguồn nhiều bài nhất và so sánh MAE.
+Sau khi thay đổi mã định nghĩa, chạy migration và MCP để tạo/cập nhật biểu đồ
+mà không gọi Gemini:
+
+```bash
+docker compose --profile ai build analytics
+docker compose --profile ai run --rm analytics python -c "from analytics.common import migrate; migrate()"
+docker compose --profile ai run --rm analytics python -m analytics.verify_mcp
+```
+
+Bảng **Kiểm định dự báo theo thời gian** giữ kết quả MAE/sMAPE của lần kiểm
+định có dữ liệu gần nhất, kể cả khi dữ liệu đã cũ. `data_lag_days` là số ngày
+từ ngày cuối tập dữ liệu đến hôm nay; `stale_data` nghĩa là trễ quá 3 ngày.
+Trong trường hợp đó, hệ thống vẫn hiển thị kiểm định lịch sử và tạm dừng
+sinh dự báo mới.
 
 ```bash
 docker compose --profile ai run --rm analytics python -m analytics.pipeline --limit 5

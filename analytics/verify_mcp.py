@@ -1,4 +1,4 @@
-"""Khởi chạy MCP qua stdio, initialize/list_tools/call_tool và kiểm tra cả 10 chart thật."""
+"""Khởi chạy MCP qua stdio, initialize/list_tools/call_tool và kiểm tra mọi chart thật."""
 import asyncio
 import json
 import os
@@ -8,6 +8,7 @@ from mcp import ClientSession,StdioServerParameters
 from mcp.client.stdio import stdio_client
 from analytics.common import write_json
 from analytics.errors import failure_message
+from analytics.dashboard import definitions
 
 
 def unpack(result):
@@ -29,6 +30,9 @@ async def verify():
             tools=[tool.name for tool in listed.tools]
             assert set(tools)=={'get_analysis_status','list_dashboards','list_datasets','ensure_ai_dashboard','get_chart_data'}
             dashboard=unpack(await session.call_tool('ensure_ai_dashboard',{}))
+            assert len(dashboard['charts'])==len(definitions()),'Thiếu biểu đồ trong kết quả MCP'
+            repeated=unpack(await session.call_tool('ensure_ai_dashboard',{}))
+            assert repeated==dashboard,'Chạy lại MCP phải giữ nguyên id dashboard/dataset/chart'
             datasets=unpack(await session.call_tool('list_datasets',{}))
             assert set(dashboard['datasets'].values()) <= {row['id'] for row in datasets}
             status=unpack(await session.call_tool('get_analysis_status',{}))

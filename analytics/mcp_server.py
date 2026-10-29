@@ -35,7 +35,7 @@ def list_datasets() -> list[dict]:
 
 @mcp.tool()
 def ensure_ai_dashboard() -> dict:
-    """Tạo/cập nhật đúng dashboard TH2 và 10 biểu đồ định sẵn; giữ nguyên dashboard TH1."""
+    """Tạo/cập nhật đúng dashboard TH2 và 16 biểu đồ định sẵn; giữ nguyên dashboard TH1."""
     return ensure_dashboard(client)
 
 

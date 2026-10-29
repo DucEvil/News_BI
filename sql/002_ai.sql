@@ -41,6 +41,17 @@ SELECT a.id,a.title,a.description,a.content,a.source_name,a.published_at,a.url,
        CASE WHEN b.article_id IS NULL THEN 'pending' ELSE 'analyzed' END AS analysis_status
 FROM v_articles a LEFT JOIN latest b ON b.article_id=a.id;
 CREATE OR REPLACE VIEW v_ai_analyzed AS SELECT * FROM v_ai_articles WHERE analysis_status='analyzed';
+CREATE OR REPLACE VIEW v_ai_daily_activity AS
+SELECT (analyzed_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AS analysis_date,
+       count(*)::bigint AS analyzed_count
+FROM v_ai_analyzed
+GROUP BY (analyzed_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date;
+CREATE OR REPLACE VIEW v_ai_source_coverage AS
+SELECT source_name,count(*)::bigint AS total_articles,
+       count(*) FILTER (WHERE analysis_status='analyzed')::bigint AS analyzed_articles,
+       count(*) FILTER (WHERE analysis_status='pending')::bigint AS pending_articles,
+       round(100.0*count(*) FILTER (WHERE analysis_status='analyzed')/count(*),2) AS coverage_percent
+FROM v_ai_articles GROUP BY source_name;
 CREATE OR REPLACE VIEW v_forecast_series AS
 WITH latest AS (SELECT id FROM forecast_runs WHERE id=(SELECT max(id) FROM forecast_runs) AND status='success'), points AS (
  SELECT news_date,article_count::double precision AS observed_count,NULL::double precision AS predicted_count
@@ -54,8 +65,15 @@ FROM points GROUP BY news_date;
 CREATE OR REPLACE VIEW v_forecast_metrics AS
 SELECT r.id,r.generated_at,r.train_start,r.train_end,r.n_observations,r.selected_model,
        m.key AS model_name,(m.value->>'mae')::double precision AS mae,
-       (m.value->>'smape')::double precision AS smape,(m.value->>'test_days')::int AS test_days
+       (m.value->>'smape')::double precision AS smape,(m.value->>'test_days')::int AS test_days,
+       CASE WHEN (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date-r.train_end > 3
+            THEN 'stale_data' ELSE 'fresh_data' END AS data_status,
+       (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date-r.train_end AS data_lag_days
 FROM forecast_runs r CROSS JOIN LATERAL jsonb_each(r.metrics) m
-WHERE r.id=(SELECT max(id) FROM forecast_runs) AND r.status='success';
+WHERE r.id=(SELECT max(id) FROM forecast_runs
+            WHERE status IN ('success','stale_data') AND metrics <> '{}'::jsonb);
 COMMENT ON VIEW v_ai_articles IS 'pending nghĩa là chưa có kết quả Gemini; không gán nhãn giả';
 COMMENT ON VIEW v_forecast_series IS 'Dự báo số bài đã thu thập, không phải toàn bộ tin tức; thiếu ngày thu thập không gán 0';
+COMMENT ON VIEW v_forecast_metrics IS 'Kiểm định lịch sử vẫn có giá trị khi dữ liệu cũ; hiển thị độ trễ, không coi đây là dự báo mới';
+COMMENT ON VIEW v_ai_daily_activity IS 'Số bài theo ngày của bản phân tích gần nhất, múi giờ Việt Nam; không phải số request Gemini';
+COMMENT ON VIEW v_ai_source_coverage IS 'Độ bao phủ là tỷ lệ bài có kết quả AI, không phải độ chính xác của mô hình';

@@ -37,7 +37,8 @@ def definitions():
           'x_axis':'news_date','groupby':[],'show_legend':True,'time_grain_sqla':'P1D','markerEnabled':True,
           'y_axis_title':'Số bài đã lưu / ước lượng','forecastEnabled':False}),
         ('TH2 · Kiểm định dự báo theo thời gian','table','v_forecast_metrics',
-         {'query_mode':'raw','all_columns':['model_name','mae','smape','test_days','n_observations','train_end'],
+         {'query_mode':'raw','all_columns':['model_name','mae','smape','test_days','n_observations','train_end',
+                                          'data_status','data_lag_days'],
           'order_by_cols':[json.dumps(['mae',True])],'page_length':10}),
         ('TH2 · Chi tiết phân tích Gemini','table','v_ai_analyzed',
          {'query_mode':'raw','all_columns':['published_at','title','source_name','sentiment','topic','summary_vi',
@@ -47,6 +48,30 @@ def definitions():
          {'query_mode':'raw','all_columns':['id','started_at','status','model_name','articles_analyzed',
                                           'requests_made','latency_seconds','error_code'],
           'order_by_cols':[json.dumps(['id',False])],'page_length':10}),
+        ('TH2 · Trạng thái xử lý AI','pie','v_ai_articles',
+         {'metric':count,'groupby':['analysis_status'],'donut':True,'show_labels':True,
+          'label_type':'key_percent'}),
+        ('TH2 · Top 10 nguồn tin đã thu thập','echarts_timeseries_bar','v_ai_articles',
+         {'metrics':[count],'x_axis':'source_name','groupby':[],'orientation':'horizontal',
+          'x_axis_sort':'Số bài','x_axis_sort_asc':True,'show_value':True,'row_limit':10}),
+        ('TH2 · Cảm xúc trung bình theo chủ đề','echarts_timeseries_bar','v_ai_analyzed',
+         {'metrics':[metric('AVG(sentiment_score)','Điểm cảm xúc trung bình')],
+          'x_axis':'topic','groupby':[],'orientation':'horizontal','show_value':True,
+          'x_axis_sort':'Điểm cảm xúc trung bình','x_axis_sort_asc':True,
+          'y_axis_bounds':[-1,1],'y_axis_title':'Âm: tiêu cực · Dương: tích cực','row_limit':20}),
+        ('TH2 · Số bài phân tích AI theo ngày','echarts_timeseries_line','v_ai_daily_activity',
+         {'metrics':[metric('SUM(analyzed_count)','Số bài có kết quả AI')],
+          'x_axis':'analysis_date','groupby':[],'time_grain_sqla':'P1D','markerEnabled':True,
+          'y_axis_title':'Số bài theo ngày phân tích gần nhất'}),
+        ('TH2 · Độ bao phủ AI theo nguồn (Top 50)','table','v_ai_source_coverage',
+         {'query_mode':'raw','all_columns':['source_name','total_articles','analyzed_articles',
+                                          'pending_articles','coverage_percent'],
+          'order_by_cols':[json.dumps(['total_articles',False]),json.dumps(['source_name',True])],
+          'page_length':10,'include_search':True,'row_limit':50}),
+        ('TH2 · So sánh sai số dự báo MAE','echarts_timeseries_bar','v_forecast_metrics',
+         {'metrics':[metric('MAX(mae)','MAE (bài)')],'x_axis':'model_name','groupby':[],
+          'orientation':'horizontal','x_axis_sort':'MAE (bài)','x_axis_sort_asc':True,
+          'show_value':True,'y_axis_title':'MAE thấp hơn tương ứng sai số nhỏ hơn'}),
     ]
 
 
@@ -81,7 +106,9 @@ def layout(charts):
         'GRID_ID':{'id':'GRID_ID','type':'GRID','parents':['ROOT_ID'],'children':[]},
         'HEADER_ID':{'id':'HEADER_ID','type':'HEADER','meta':{'text':TITLE}}}
     groups=[(charts[:2],6,18),(charts[2:4],6,42),([charts[4]],12,40),([charts[5]],12,45),
-            ([charts[6]],12,45),([charts[7]],12,35),([charts[8]],12,50),([charts[9]],12,35)]
+            ([charts[6]],12,45),([charts[7]],12,35),([charts[8]],12,50),([charts[9]],12,35),
+            (charts[10:12],6,45),([charts[12]],12,42),([charts[13]],12,40),
+            ([charts[14]],12,45),([charts[15]],12,40)]
     note=('### TH2: phạm vi và cách đọc\n'
           '**Chưa điền GEMINI_API_KEY thì biểu đồ cảm xúc/chủ đề để trống, KPI AI bằng 0; xem nhật ký waiting_key.** '
           'Sau khi điền khóa và chạy worker, Superset tự đọc kết quả đã lưu. '
@@ -89,6 +116,8 @@ def layout(charts):
           'confidence do mô hình tự ước lượng, không phải accuracy đã kiểm định. '
           'Dự báo áp dụng cho **số bài đã thu thập**, có thiên lệch quota và ngày máy không chạy; '
           'MAE/sMAPE là backtest trên số ít ngày, chưa đủ kết luận khả năng tổng quát. '
+          'Bảng kiểm định giữ kết quả lịch sử và hiển thị data_lag_days (số ngày trễ); '
+          'stale_data nghĩa là dữ liệu cũ quá 3 ngày, tạm dừng sinh dự báo mới. '
           'Không dùng số lượng tin tiêu cực để kết luận uy tín nguồn. '
           'Xem output/th2/BAO_CAO_KY_THUAT.md để biết trạng thái kiểm chứng và đánh giá nhãn người.')
     value['GRID_ID']['children'].append('ROW-TH2-NOTE')
@@ -97,6 +126,20 @@ def layout(charts):
     value['TH2-NOTE']={'id':'TH2-NOTE','type':'MARKDOWN','children':[],
         'parents':['ROOT_ID','GRID_ID','ROW-TH2-NOTE'],'meta':{'code':note,'width':12,'height':35}}
     for index,(items,width,height) in enumerate(groups):
+        if index==8:
+            value['GRID_ID']['children'].append('ROW-TH2-REPORTS')
+            value['ROW-TH2-REPORTS']={'id':'ROW-TH2-REPORTS','type':'ROW',
+                'parents':['ROOT_ID','GRID_ID'],'children':['TH2-REPORTS'],
+                'meta':{'background':'BACKGROUND_TRANSPARENT'}}
+            value['TH2-REPORTS']={'id':'TH2-REPORTS','type':'MARKDOWN','children':[],
+                'parents':['ROOT_ID','GRID_ID','ROW-TH2-REPORTS'],
+                'meta':{'width':12,'height':22,'code':(
+                    '### Báo cáo bổ sung\n'
+                    'analyzed: đã phân tích; pending: đang chờ. Độ bao phủ (%) là tỷ lệ bài '
+                    'có kết quả AI, không phải độ chính xác. Điểm cảm xúc chỉ đại diện cho '
+                    'các bài đã phân tích. Ngày phân tích theo giờ Việt Nam; nếu phân tích '
+                    'lại, bài được tính vào ngày của kết quả mới nhất. '
+                    'MAE dùng cùng kết quả kiểm định lịch sử ở bảng phía trên.')}}
         row_id=f'ROW-TH2-{index}'
         value['GRID_ID']['children'].append(row_id)
         value[row_id]={'id':row_id,'type':'ROW','parents':['ROOT_ID','GRID_ID'],
@@ -116,15 +159,19 @@ def ensure_dashboard(client):
     all_datasets=client.resources('dataset')
     datasets={}
     times={'v_ai_articles':'published_date_vn','v_ai_analyzed':'published_date_vn',
-           'v_forecast_series':'news_date','v_forecast_metrics':'generated_at','ai_runs':'started_at'}
+           'v_forecast_series':'news_date','v_forecast_metrics':'generated_at','ai_runs':'started_at',
+           'v_ai_daily_activity':'analysis_date','v_ai_source_coverage':None}
     for name,time_col in times.items():
         existing=next((r for r in all_datasets if r['table_name']==name and r.get('schema')=='public'
                        and (r.get('database') or {}).get('id')==database['id']),None)
         if existing:
             identity=existing['id']
+            # Đồng bộ các cột mới khi migration thay đổi SQL view.
+            client.request('PUT',f'/api/v1/dataset/{identity}/refresh',{})
         else:
             identity=client.upsert('dataset',None,{'database':database['id'],'schema':'public','table_name':name})
-        client.request('PUT',f'/api/v1/dataset/{identity}',{'main_dttm_col':time_col})
+        if time_col:
+            client.request('PUT',f'/api/v1/dataset/{identity}',{'main_dttm_col':time_col})
         datasets[name]=identity
     existing_dashboard=next((r for r in client.resources('dashboard') if r.get('slug')==SLUG),None)
     dashboard_id=client.upsert('dashboard',existing_dashboard,{'dashboard_title':TITLE,'slug':SLUG,'published':True})
